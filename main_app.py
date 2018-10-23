@@ -142,5 +142,18 @@ def get_measure_values():
     return jsonify({"data": measures_list})
 
 
+@app.route('/api/AddMeasureValue/', methods=['POST'])
+@auth.login_required
+def add_measure_value():
+    measure_id = request.json.get('measure_id')
+    measure_datetime = request.json.get('measure_datetime')
+    value = request.json.get('value')
+    user_id = g.user.id
+    measure = MeasuresDairyRows(user_id=user_id, measure_id=measure_id, measure_datetime=measure_datetime, value=value)
+    db.session.add(measure)
+    db.session.commit()
+    return jsonify({'username': user.username}), 201
+
+
 if __name__ == "__main__":
     app.run(debug=True)
