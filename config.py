@@ -3,10 +3,11 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 
 
 class Config:
-    SECRET_KEY = "Very Secret Key"
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+    SECRET_KEY = os.environ.get("SECRET_KEY")
     SQLALCHEMY_COMMIT_ON_TEARDOWN = True
     MAIL_SUBJECT_PREFIX = "[FoodDairyProject]"
-    MAIL_SENDER = "Admin"
+    MAIL_DEFAULT_SENDER = "FoodDairy Admin"
     ADMIN = os.environ.get("ADMIN")
 
     @staticmethod
@@ -16,7 +17,7 @@ class Config:
 
 class DevelopmentConfig(Config):
     DEBUG = True
-    MAIL_SERVER = "smtp.googlemail.com"
+    MAIL_SERVER = "smtp.gmail.com"
     MAIL_PORT = 587
     MAIL_USE_TLS = True
     MAIL_USERNAME = os.environ.get("MAIL_USERNAME")
