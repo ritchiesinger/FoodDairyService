@@ -5,13 +5,40 @@ import json
 import datetime
 from itsdangerous import (TimedJSONWebSignatureSerializer as Serializer, BadSignature, SignatureExpired)
 from flask_httpauth import HTTPBasicAuth
+from flask_mail import Mail, Message
+import os
+import random
+
 auth = HTTPBasicAuth()
 
 app = Flask(__name__)
+
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///fooddairydb'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config["SECRET_KEY"] = "Very Secret Key"
+app.config["MAIL_SERVER"] = "smtp.gmail.com"
+app.config["MAIL_PORT"] = 587
+app.config["MAIL_USE_TLS"] = True
+app.config["MAIL_USERNAME"] = os.environ.get("MAIL_USERNAME")
+app.config["MAIL_PASSWORD"] = os.environ.get("MAIL_PASSWORD")
+app.config["MAIL_DEFAULT_SENDER"] = "FoodDairy Admin"
+
+mail = Mail(app)
+
 db = SQLAlchemy(app)
+
+
+def password_generator():
+    avaliable_symbols = "abcdefghijklmnopqrstuvwxyz01234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ!@#$%^&*()?"
+    password_lenght = 8
+    generated_password = "".join(random.sample(avaliable_symbols, password_lenght))
+    return generated_password
+
+
+def send_mail(recipients, subject, html):
+    msg = Message(subject=subject, recipients=recipients, html=html)
+    with app.app_context():
+        mail.send(msg)
 
 
 class User(db.Model):
@@ -109,6 +136,26 @@ def verify_password(username_or_token, password):
             return False
     g.user = user
     return True
+
+
+@app.route('/api/PasswordReset/', methods=["GET"])
+def password_reset():
+    email = request.args.get('email')
+    user = User.query.filter_by(email=email).first()
+    if not user:
+        return json.dumps({'Error': "User not found!"}), 400, {'ContentType': 'application/json'}
+    else:
+        new_password = password_generator()
+        user.hash_password(new_password)
+        db.session.commit()
+        html = "<h2>Уважаемый пользователь!</h2>" \
+               "<p>Вы получили это письмо, т.к сделали запрос на восстановление пароля в " \
+               "сервисе FoodDairy.</p>" \
+               f"<p>Пароль к учётной записи {user.email} сброшен и сгенерирован новый, который вы сможете в любой " \
+               "момент поменять самостоятельно.<p>" \
+               f"<p>Сгенерированный пароль:<b>{new_password}</b></p>"
+        send_mail(recipients=["ritchie_singer@mail.ru"], subject="Восстановление пароля к сервису FoodDairy", html=html)
+        return jsonify({"data": f"New password send to {email}!"})
 
 
 @app.route("/api/GetMyProfile/")
