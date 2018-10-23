@@ -193,13 +193,32 @@ def get_measure_values():
 @auth.login_required
 def add_measure_value():
     measure_id = request.json.get('measure_id')
+    if Measures.query.filter_by(id=measure_id).first() is None:
+        error_text = "Measure type with specified id is not found!"
+        return json.dumps({"data": None, "ErrorCode": 61,
+                           "ErrorText": error_text}), 400, {'ContentType': 'application/json'}
     measure_datetime = request.json.get('measure_datetime')
+    datetime_format = '%Y%m%d%H%M'
+    try:
+        measure_datetime = datetime.datetime.strptime(measure_datetime, datetime_format)
+    except ValueError:
+        error_text = "Unexpected datetime format! Expected 'YYYYMMDDHHMM'!"
+        return json.dumps({"data": None, "ErrorCode": 62,
+                           "ErrorText": error_text}), 400, {'ContentType': 'application/json'}
     value = request.json.get('value')
+    try:
+        float(value)
+    except ValueError:
+        error_text = "Value must be int or float number!"
+        return json.dumps({"data": None, "ErrorCode": 63,
+                           "ErrorText": error_text}), 400, {'ContentType': 'application/json'}
     user_id = g.user.id
     measure = MeasuresDairyRows(user_id=user_id, measure_id=measure_id, measure_datetime=measure_datetime, value=value)
     db.session.add(measure)
     db.session.commit()
-    return jsonify({'username': user.username}), 201
+    return json.dumps({"data": None,
+                       "ErrorCode": 0,
+                       "ErrorText": "Value successfuly added!"}), 200, {'ContentType': 'application/json'}
 
 
 if __name__ == "__main__":
