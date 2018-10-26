@@ -146,6 +146,20 @@ def password_reset():
         return jsonify({"data": f"New password send to {email}!"})
 
 
+@app.route('/api/SetNewPassword/', methods=["POST"])
+@auth.login_required
+def set_new_password():
+    """ Метод установки нового пароля. Требуется авторизация. На вход ожидает JSON вида: {"password": "somepassword"}
+    :return: Стандартный контракт вида:  {"data": None, "ErrorCode": 0, "ErrorText": "New password is set!"} """
+    new_password = request.json.get('password')
+    user = User.query.filter_by(username=g.user.username).first()
+    user.hash_password(new_password)
+    db.session.commit()
+    return json.dumps({"data": None, "ErrorCode": 0,
+                       "ErrorText": "New password is set!"}), 200, {'ContentType': 'application/json'}
+
+
+
 @app.route("/api/GetMyProfile/")
 @auth.login_required
 def get_my_profile():
