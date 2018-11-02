@@ -4,9 +4,9 @@ Flask==1.0.2
 Flask-HTTPAuth==3.2.4
 Flask-Mail==0.9.1
 Flask-SQLAlchemy==2.3.2
-ItsDangerous==1.0.0
+itsdangerous==1.1.0
 Jinja2==2.10
 MarkupSafe==1.0
 passlib==1.7.1
-SQLAlchemy==1.2.12
+SQLAlchemy==1.2.13
 Werkzeug==0.14.1

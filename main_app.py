@@ -42,24 +42,45 @@ class User(db.Model):
     def verify_password(self, password):
         return pwd_context.verify(password, self.password_hash)
 
-    def generate_auth_token(self, expiration=600):  # 600 секунд на пртухание
-        s = Serializer(app.config['SECRET_KEY'], expires_in=expiration)
-        return s.dumps({'id': self.id})
+    def generate_tokens(self, token_type=None, expiration=60):  # 60 секунд на пртухание
+        auth_token = Serializer(app.config['SECRET_KEY'], expires_in=expiration)
+        refresh_token = Serializer(app.config['SECRET_KEY'] + "refresh", expires_in=expiration * 3)
+        return {"AuthToken": auth_token.dumps({'id': self.id}).decode('ascii'),
+                "RefreshToken": refresh_token.dumps({'id': self.id}).decode('ascii')}
 
     @staticmethod
-    def verify_auth_token(token):
-        s = Serializer(app.config['SECRET_KEY'])
+    def verify_auth_token(auth_token, refresh_token):
+        auth_token_check = Serializer(app.config['SECRET_KEY'])
+        new_tokens = None
         try:
-            data = s.loads(token)
+            data = auth_token_check.loads(auth_token)
+            user = User.query.get(data['id'])
+            return {"User": user, "NewTokens": new_tokens}
+        except SignatureExpired:
+            # return None  # Токен протух
+            try_refresh_token = User.verify_refresh_token(refresh_token)
+            if try_refresh_token is not None:
+                new_tokens = try_refresh_token.generate_tokens()
+                return {"User": try_refresh_token, "NewTokens": new_tokens}
+            else:
+                return None
+        except BadSignature:
+            return None  # Неверный токен
+
+    def __repr__(self):
+        return f"<User {self.username}>"
+
+    @staticmethod
+    def verify_refresh_token(refresh_token):
+        refresh_token_check = Serializer(app.config['SECRET_KEY'] + "refresh")
+        try:
+            data = refresh_token_check.loads(refresh_token)
         except SignatureExpired:
             return None  # Токен протух
         except BadSignature:
             return None  # Неверный токен
         user = User.query.get(data['id'])
         return user
-
-    def __repr__(self):
-        return f"<User {self.username}>"
 
 
 class Measures(db.Model):
@@ -108,19 +129,20 @@ def user_registration():
 
 @app.route('/api/GetToken/', methods=['GET'])
 @auth.login_required
-def get_token():
-    token = g.user.generate_auth_token()
-    return jsonify({"data": {'AuthToken': token.decode('ascii')}})
+def get_tokens():
+    tokens = g.user.generate_tokens()
+    return jsonify({"data": {"AuthToken": tokens.get("AuthToken").decode('ascii'),
+                             "RefreshToken": tokens.get("RefreshToken").decode('ascii')}})
 
 
 @auth.verify_password
-def verify_password(username_or_token, password):
+def verify_password(username_or_auth_token, password_or_refresh_token):
     # Сначала пробуем авторизоваться по токену
-    user = User.verify_auth_token(username_or_token)
+    user = User.verify_auth_token(auth_token=username_or_auth_token, refresh_token=password_or_refresh_token)
     if not user:
         # А теперь по обычному - логину и паролю
-        user = User.query.filter_by(username=username_or_token).first()
-        if not user or not user.verify_password(password):
+        user = User.query.filter_by(username=username_or_auth_token).first()
+        if not user or not user.verify_password(password_or_refresh_token):
             return False
     g.user = user
     return True
@@ -159,16 +181,18 @@ def set_new_password():
                        "ErrorText": "New password is set!"}), 200, {'ContentType': 'application/json'}
 
 
-
 @app.route("/api/GetMyProfile/")
 @auth.login_required
 def get_my_profile():
-    return jsonify({"data": {"UserName": g.user.username, "Email": g.user.email}})
+    return_dict = {"NewTokens": g.user.get("NewTokens")} if g.user.get("NewTokens") else dict()
+    return_dict.update({"data": {"UserName": g.user.username, "Email": g.user.email}})
+    return jsonify(return_dict)
 
 
 @app.route("/api/GetMeasureValues/", methods=['GET'])
 @auth.login_required
 def get_measure_values():
+    return_dict = {"NewTokens": g.user.get("NewTokens")} if g.user.get("NewTokens") else dict()
     date_format = '%Y%m%d'
     measure_id = request.args.get('measure_id')
     date_interval = request.args.get('date_interval')
@@ -183,12 +207,13 @@ def get_measure_values():
         measure_rows = MeasuresDairyRows.query.filter_by(user_id=g.user.id, measure_id=measure_id) \
             .filter(MeasuresDairyRows.measure_datetime >= date_from, MeasuresDairyRows.measure_datetime < date_to).all()
     else:
-        measure_rows = MeasuresDairyRows.query.filter_by(user_id=g.user.id, measure_id=measure_id).all()
+        measure_rows = MeasuresDairyRows.query.filter_by(user_id=g.user.get("User").id, measure_id=measure_id).all()
     measures_list = list()
     for row in measure_rows:
         measures_list.append({"MeasureName": row.measure_name.measure_name, "MeasureDateTime": row.measure_datetime,
                               "Value": row.value})
-    return jsonify({"data": measures_list})
+    return_dict.update({"data": measures_list})
+    return jsonify(return_dict)
 
 
 @app.route('/api/AddMeasureValue/', methods=['POST'])
