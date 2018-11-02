@@ -42,20 +42,33 @@ class User(db.Model):
     def verify_password(self, password):
         return pwd_context.verify(password, self.password_hash)
 
-    def generate_tokens(self, token_type=None, expiration=60):  # 60 секунд на пртухание
-        auth_token = Serializer(app.config['SECRET_KEY'], expires_in=expiration)
-        refresh_token = Serializer(app.config['SECRET_KEY'] + "refresh", expires_in=expiration * 3)
-        return {"AuthToken": auth_token.dumps({'id': self.id}).decode('ascii'),
-                "RefreshToken": refresh_token.dumps({'id': self.id}).decode('ascii')}
+    def generate_tokens(self, is_refresh=False, expiration=60):  # 60 секунд на пртухание
+        if is_refresh is False:
+            auth_token = Serializer(app.config['SECRET_KEY'], expires_in=expiration)
+            result = {"AuthToken": auth_token.dumps({'id': self.id}).decode('ascii')}
+        elif is_refresh is True:
+            refresh_token = Serializer(app.config['SECRET_KEY'] + "refresh", expires_in=expiration * 3)
+            result = {"RefreshToken": refresh_token.dumps({'id': self.id}).decode('ascii')}
+        else:
+            auth_token = Serializer(app.config['SECRET_KEY'], expires_in=expiration)
+            refresh_token = Serializer(app.config['SECRET_KEY'] + "refresh", expires_in=expiration * 3)
+            result = {"AuthToken": auth_token.dumps({'id': self.id}).decode('ascii'),
+                      "RefreshToken": refresh_token.dumps({'id': self.id}).decode('ascii')}
+        return result
 
     @staticmethod
     def verify_auth_token(auth_token, refresh_token):
         auth_token_check = Serializer(app.config['SECRET_KEY'])
-        new_tokens = None
+        return_dict = dict()
         try:
             data = auth_token_check.loads(auth_token)
             user = User.query.get(data['id'])
-            return {"User": user, "NewTokens": new_tokens}
+            return_dict.update({"User": user})
+            try_refresh_token = user.verify_refresh_token(refresh_token)
+            if try_refresh_token is None:
+                new_tokens = user.generate_tokens(is_refresh=True)
+                return_dict.update({"NewTokens": new_tokens})
+            return return_dict
         except SignatureExpired:
             # return None  # Токен протух
             try_refresh_token = User.verify_refresh_token(refresh_token)
@@ -130,9 +143,9 @@ def user_registration():
 @app.route('/api/GetToken/', methods=['GET'])
 @auth.login_required
 def get_tokens():
-    tokens = g.user.generate_tokens()
-    return jsonify({"data": {"AuthToken": tokens.get("AuthToken").decode('ascii'),
-                             "RefreshToken": tokens.get("RefreshToken").decode('ascii')}})
+    tokens = g.user.generate_tokens(is_refresh="All")
+    return jsonify({"data": {"AuthToken": tokens.get("AuthToken"),
+                             "RefreshToken": tokens.get("RefreshToken")}})
 
 
 @auth.verify_password
