@@ -125,6 +125,36 @@ class MeasuresDairyRows(db.Model):
         return f"<MeasuresDairyRows: {self.id}>"
 
 
+class Products(db.Model):
+    __tablename__ = "products"
+    id = db.Column(db.Integer, primary_key=True, nullable=False)
+    name = db.Column(db.String(80), unique=True, nullable=False)
+    callories = db.Column(db.Integer, nullable=False)
+    fat = db.Column(db.REAL, nullable=False)
+    protein = db.Column(db.REAL, nullable=False)
+    carbohydrate = db.Column(db.REAL, nullable=False)
+    description = db.Column(db.String())
+    image_link = db.Column(db.String())
+    disabled = db.Column(db.Boolean, nullable=False)
+
+    def __repr__(self):
+        return f"<Products {self.id} ({self.name})>"
+
+
+class ProductsDairyRows(db.Model):
+    __tablename__ = "products_dairy_rows"
+    id = db.Column(db.Integer, primary_key=True, nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey('products.id'), nullable=False)
+    record_datetime = db.Column(db.DateTime, nullable=False)
+    product_weight = db.Column(db.Integer, nullable=False)
+    user = db.relationship("User", foreign_keys=user_id)
+    product = db.relationship("Products", foreign_keys=product_id)
+
+    def __repr__(self):
+        return f"<ProductDairyRows {self.id}>"
+
+
 @app.route('/api/Users/', methods=['POST'])
 def user_registration():
     username = request.json.get('username')
@@ -209,63 +239,257 @@ def get_my_profile():
     return jsonify(return_dict)
 
 
-@app.route("/api/GetMeasureValues/", methods=['GET'])
+@app.route('/api/MeasureValues/', methods=["GET", "POST", "PATCH", "DELETE"])
 @auth.login_required
-def get_measure_values():
+def measure_values():
     return_dict = {"NewTokens": g.user.get("NewTokens")} if g.user.get("NewTokens") else dict()
-    date_format = '%Y%m%d'
-    measure_id = request.args.get('measure_id')
-    date_interval = request.args.get('date_interval')
-    if date_interval:
+    if request.method == "GET":  # Получаем данные
+        date_format = '%Y%m%d'
+        measure_id = request.args.get('measure_id')
+        date_interval = request.args.get('date_interval')
+        if date_interval:
+            try:
+                date_interval = date_interval.split("-")
+                date_from = datetime.datetime.strptime(date_interval[0], date_format)
+                date_to = datetime.datetime.strptime(date_interval[1], date_format)
+            except ValueError:
+                error_text = "Unexpected date_interval format! Expected 'YYYYMMDD-YYYYMMDD'!"
+                return json.dumps({'Error': error_text}), 400, {'ContentType': 'application/json'}
+            measure_rows = MeasuresDairyRows.query.filter_by(user_id=g.user.get("User").id, measure_id=measure_id) \
+                .filter(MeasuresDairyRows.measure_datetime >= date_from,
+                        MeasuresDairyRows.measure_datetime < date_to).order_by(MeasuresDairyRows.measure_datetime.desc()).all()
+        else:
+            measure_rows = MeasuresDairyRows.query.filter_by(user_id=g.user.get("User").id, measure_id=measure_id).order_by(MeasuresDairyRows.measure_datetime.desc()).all()
+        measures_list = list()
+        for row in measure_rows:
+            measures_list.append({"ID": row.id, "MeasureName": row.measure_name.measure_name,
+                                  "MeasureDateTime": row.measure_datetime, "Value": row.value})
+        return_dict.update({"Data": measures_list})
+        return jsonify(return_dict)
+    elif request.method == "POST":  # Добавляем новую запись
+        measure_id = request.json.get('MeasureID')
+        if Measures.query.filter_by(id=measure_id).first() is None:
+            error_text = "Measure type with specified id is not found!"
+            return_dict.update({"Data": None, "ErrorCode": 61, "ErrorText": error_text})
+            return json.dumps(return_dict), 400, {'ContentType': 'application/json'}
+        measure_datetime = request.json.get('MeasureDateTime')
+        datetime_format = '%Y%m%d%H%M'
         try:
-            date_interval = date_interval.split("-")
-            date_from = datetime.datetime.strptime(date_interval[0], date_format)
-            date_to = datetime.datetime.strptime(date_interval[1], date_format)
+            measure_datetime = datetime.datetime.strptime(measure_datetime, datetime_format)
         except ValueError:
-            error_text = "Unexpected date_interval format! Expected 'YYYYMMDD-YYYYMMDD'!"
-            return json.dumps({'Error': error_text}), 400, {'ContentType': 'application/json'}
-        measure_rows = MeasuresDairyRows.query.filter_by(user_id=g.user.get("User").id, measure_id=measure_id) \
-            .filter(MeasuresDairyRows.measure_datetime >= date_from, MeasuresDairyRows.measure_datetime < date_to).all()
-    else:
-        measure_rows = MeasuresDairyRows.query.filter_by(user_id=g.user.get("User").id, measure_id=measure_id).all()
-    measures_list = list()
-    for row in measure_rows:
-        measures_list.append({"MeasureName": row.measure_name.measure_name, "MeasureDateTime": row.measure_datetime,
-                              "Value": row.value})
-    return_dict.update({"data": measures_list})
-    return jsonify(return_dict)
+            error_text = "Unexpected datetime format! Expected 'YYYYMMDDHHMM'!"
+            return_dict.update({"Data": None, "ErrorCode": 62, "ErrorText": error_text})
+            return json.dumps(return_dict), 400, {'ContentType': 'application/json'}
+        value = request.json.get('Value')
+        try:
+            float(value)
+        except ValueError:
+            error_text = "Value must be int or float number!"
+            return_dict.update({"Data": None, "ErrorCode": 63, "ErrorText": error_text})
+            return json.dumps(return_dict), 400, {'ContentType': 'application/json'}
+        user_id = g.user.get("User").id
+        measure = MeasuresDairyRows(user_id=user_id, measure_id=measure_id, measure_datetime=measure_datetime,
+                                    value=value)
+        db.session.add(measure)
+        db.session.commit()
+        return_dict.update({"Data": None, "ErrorCode": 0, "ErrorText": "Value successfuly added!"})
+        return json.dumps(return_dict), 200, {'ContentType': 'application/json'}
+    elif request.method == "PATCH":  # Редактируем существующую запись
+        edit_record_id = request.json.get('ID')
+        search_record = MeasuresDairyRows.query.filter_by(id=edit_record_id).first()
+        if search_record is None:
+            response_code, error_text = 400, "Record not found!"
+            return_dict.update({"Data": None, "ErrorCode": 64, "ErrorText": error_text})
+        else:
+            if search_record.user.id != g.user.get("User").id:
+                error_text = "Record not found!"
+                return_dict.update({"Data": None, "ErrorCode": 64, "ErrorText": error_text})
+                return json.dumps(return_dict), 400, {'ContentType': 'application/json'}
+            else:
+                if request.json.get('MeasureID') is not None:
+                    measure_id = request.json.get('MeasureID')
+                    if Measures.query.filter_by(id=measure_id).first() is None:
+                        response_code, error_text = 400, "Measure type with specified id is not found!"
+                        return_dict.update({"Data": None, "ErrorCode": 61, "ErrorText": error_text})
+                        return json.dumps(return_dict), response_code, {'ContentType': 'application/json'}
+                    else:
+                        search_record.measure_id = measure_id
+                if request.json.get('MeasureDateTime') is not None:
+                    measure_datetime = request.json.get('MeasureDateTime')
+                    datetime_format = '%Y%m%d%H%M'
+                    try:
+                        measure_datetime = datetime.datetime.strptime(measure_datetime, datetime_format)
+                        search_record.measure_datetime = measure_datetime
+                    except ValueError:
+                        response_code, error_text = 400, "Unexpected datetime format! Expected 'YYYYMMDDHHMM'!"
+                        return_dict.update({"Data": None, "ErrorCode": 62, "ErrorText": error_text})
+                        return json.dumps(return_dict), response_code, {'ContentType': 'application/json'}
+                if request.json.get('Value') is not None:
+                    value = request.json.get('Value')
+                    try:
+                        float(value)
+                        search_record.value = value
+                    except ValueError:
+                        response_code, error_text = 400, "Value must be int or float number!"
+                        return_dict.update({"Data": None, "ErrorCode": 63, "ErrorText": error_text})
+                        return json.dumps(return_dict), response_code, {'ContentType': 'application/json'}
+            db.session.add(search_record)
+            db.session.commit()
+            response_code, error_text = 200, "Value successfuly edited!"
+            return_dict.update({"Data": None, "ErrorCode": 0, "ErrorText": error_text})
+        return json.dumps(return_dict), response_code, {'ContentType': 'application/json'}
+    elif request.method == "DELETE":  # Удаляем запись
+        edit_record_id = request.json.get('ID')
+        search_record = MeasuresDairyRows.query.filter_by(id=edit_record_id).first()
+        if search_record is None:
+            response_code, error_text = 400, "Record not found!"
+            return_dict.update({"Data": None, "ErrorCode": 64, "ErrorText": error_text})
+        else:
+            if search_record.user.id != g.user.get("User").id:
+                response_code, error_text = 400, "Record not found!"
+                return_dict.update({"Data": None, "ErrorCode": 64, "ErrorText": error_text})
+            else:
+                db.session.delete(search_record)
+                db.session.commit()
+                response_code, error_text = 200, "Value successfuly deleted!"
+                return_dict.update({"Data": None, "ErrorCode": 0, "ErrorText": error_text})
+        return json.dumps(return_dict), response_code, {'ContentType': 'application/json'}
 
 
-@app.route('/api/AddMeasureValue/', methods=['POST'])
+@app.route('/api/ProductsDairyRows/', methods=["GET", "POST", "PATCH", "DELETE"])
 @auth.login_required
-def add_measure_value():
+def products_dairy_rows():
     return_dict = {"NewTokens": g.user.get("NewTokens")} if g.user.get("NewTokens") else dict()
-    measure_id = request.json.get('measure_id')
-    if Measures.query.filter_by(id=measure_id).first() is None:
-        error_text = "Measure type with specified id is not found!"
-        return_dict.update({"data": None, "ErrorCode": 61, "ErrorText": error_text})
-        return json.dumps(return_dict), 400, {'ContentType': 'application/json'}
-    measure_datetime = request.json.get('measure_datetime')
-    datetime_format = '%Y%m%d%H%M'
-    try:
-        measure_datetime = datetime.datetime.strptime(measure_datetime, datetime_format)
-    except ValueError:
-        error_text = "Unexpected datetime format! Expected 'YYYYMMDDHHMM'!"
-        return_dict.update({"data": None, "ErrorCode": 62, "ErrorText": error_text})
-        return json.dumps(return_dict), 400, {'ContentType': 'application/json'}
-    value = request.json.get('value')
-    try:
-        float(value)
-    except ValueError:
-        error_text = "Value must be int or float number!"
-        return_dict.update({"data": None, "ErrorCode": 63, "ErrorText": error_text})
-        return json.dumps(return_dict), 400, {'ContentType': 'application/json'}
-    user_id = g.user.get("User").id
-    measure = MeasuresDairyRows(user_id=user_id, measure_id=measure_id, measure_datetime=measure_datetime, value=value)
-    db.session.add(measure)
-    db.session.commit()
-    return_dict.update({"data": None, "ErrorCode": 0, "ErrorText": "Value successfuly added!"})
-    return json.dumps(return_dict), 200, {'ContentType': 'application/json'}
+    if request.method == "GET":  # Получаем данные
+        date_format = '%Y%m%d'
+        date_interval = request.args.get('date_interval')
+        if date_interval:
+            try:
+                date_interval = date_interval.split("-")
+                date_from = datetime.datetime.strptime(date_interval[0], date_format)
+                date_to = datetime.datetime.strptime(date_interval[1], date_format)
+            except ValueError:
+                response_code, error_code = 400, 62
+                error_text = "Unexpected date_interval format! Expected 'YYYYMMDD-YYYYMMDD'!"
+                return json.dumps({"Data": None,
+                                   'ErrorText': error_text,
+                                   "ErrorCode": error_code}), response_code, {'ContentType': 'application/json'}
+            product_rows = ProductsDairyRows.query.filter_by(user_id=g.user.get("User").id).\
+                filter(MeasuresDairyRows.measure_datetime >= date_from,
+                       MeasuresDairyRows.measure_datetime < date_to).\
+                order_by(MeasuresDairyRows.measure_datetime.desc()).all()
+        else:
+            product_rows = MeasuresDairyRows.query.filter_by(user_id=g.user.get("User").id).\
+                order_by(MeasuresDairyRows.measure_datetime.desc()).all()
+        rows_list = list()
+        for row in product_rows:
+            rows_list.append({"ID": row.id, "ProductName": row.product.name, "DateTime": row.record_datetime,
+                              "ProductWeight": row.product_weight,
+                              "Callories": row.product_weight * row.product.callories / 100,
+                              "Protein": row.product_weight * row.product.protein / 100,
+                              "Fat": row.product_weight * row.product.fat / 100,
+                              "Carbohydrate": row.product_weight * row.product.carbohydrate / 100})
+        response_code, error_code = 200, 0
+        error_text = "Success"
+        return_dict.update({"Data": rows_list, "ErrorText": error_text, "ErrorCode": error_code})
+        return jsonify(return_dict), response_code, {'ContentType': 'application/json'}
+    elif request.method == "POST":  # Добавляем новую запись
+        user_id = g.user.get("User").id
+        input_datetime = request.json.get('RecordDateTime')
+        datetime_format = '%Y%m%d%H%M'
+        if input_datetime is not None:
+            try:  # Проверяем формат переданного значения
+                record_datetime = datetime.datetime.strptime(input_datetime, datetime_format)
+            except ValueError:
+                response_code, error_code, error_text = 400, 62, "Unexpected datetime format! Expected 'YYYYMMDDHHMM'!"
+                return_dict.update({"Data": None, "ErrorCode": error_code, "ErrorText": error_text})
+                return json.dumps(return_dict), response_code, {'ContentType': 'application/json'}
+        else:  # Если параметр не передан, то устанавливаем текущую дату и время
+            record_datetime = datetime.datetime.now()
+        product_id = request.json.get('ProductID')
+        if Products.query.filter_by(id=product_id).first() is None:
+            response_code, error_code, error_text = 400, 65, "Product not found!"
+            return_dict.update({"Data": None, "ErrorCode": error_code, "ErrorText": error_text})
+            return json.dumps(return_dict), response_code, {'ContentType': 'application/json'}
+        product_weight = request.json.get('ProductWeight')
+        if product_weight is not None:
+            try:
+                product_weight = int(product_weight)
+            except ValueError:
+                response_code, error_code, error_text = 400, 66, "Unexpected weight format! Expected integer!"
+                return_dict.update({"Data": None, "ErrorCode": error_code, "ErrorText": error_text})
+                return json.dumps(return_dict), response_code, {'ContentType': 'application/json'}
+        else:
+            response_code, error_code, error_text = 400, 67, "Product weight not specified!"
+            return_dict.update({"Data": None, "ErrorCode": error_code, "ErrorText": error_text})
+            return json.dumps(return_dict), response_code, {'ContentType': 'application/json'}
+        products_dairy_row = ProductsDairyRows(user_id=user_id, product_id=product_id, record_datetime=record_datetime,
+                                               product_weight=product_weight)
+        db.session.add(products_dairy_row)
+        db.session.commit()
+        response_code, error_code, error_text = 200, 0, "Row successfuly added!"
+        return_dict.update({"Data": None, "ErrorCode": error_code, "ErrorText": error_text})
+        return json.dumps(return_dict), response_code, {'ContentType': 'application/json'}
+    elif request.method == "PATCH":  # Редактируем существующую запись
+        edit_record_id = request.json.get('ID')
+        search_record = ProductsDairyRows.query.filter_by(id=edit_record_id).first()
+        if search_record is None:
+            response_code, error_code, error_text = 400, 64, "Record not found!"
+            return_dict.update({"Data": None, "ErrorCode": error_code, "ErrorText": error_text})
+        else:
+            if search_record.user.id != g.user.get("User").id:  # Принадлежит ли запись пользователю
+                response_code, error_code, error_text = 400, 64, "Record not found!"
+                return_dict.update({"Data": None, "ErrorCode": error_code, "ErrorText": error_text})
+                return json.dumps(return_dict), response_code, {'ContentType': 'application/json'}
+            else:
+                if request.json.get('ProductID') is not None:
+                    product_id = request.json.get('ProductID')
+                    if Products.query.filter_by(id=product_id).first() is None:
+                        response_code, error_code, error_text = 400, 65, "Product not found!"
+                        return_dict.update({"Data": None, "ErrorCode": error_code, "ErrorText": error_text})
+                        return json.dumps(return_dict), response_code, {'ContentType': 'application/json'}
+                    else:
+                        search_record.product_id = product_id
+                if request.json.get('DairyRowDateTime') is not None:
+                    input_datetime = request.json.get('DairyRowDateTime')
+                    datetime_format = '%Y%m%d%H%M'
+                    try:
+                        dairy_row_datetime = datetime.datetime.strptime(input_datetime, datetime_format)
+                        search_record.record_datetime = dairy_row_datetime
+                    except ValueError:
+                        response_code, error_text = 400, "Unexpected datetime format! Expected 'YYYYMMDDHHMM'!"
+                        return_dict.update({"Data": None, "ErrorCode": 62, "ErrorText": error_text})
+                        return json.dumps(return_dict), response_code, {'ContentType': 'application/json'}
+                if request.json.get('ProductWeight') is not None:
+                    product_weight = request.json.get('ProductWeight')
+                    try:
+                        int(product_weight)
+                        search_record.product_weight = int(product_weight)
+                    except ValueError:
+                        response_code, error_text = 400, "Weight must be integer number!"
+                        return_dict.update({"Data": None, "ErrorCode": 67, "ErrorText": error_text})
+                        return json.dumps(return_dict), response_code, {'ContentType': 'application/json'}
+            db.session.add(search_record)
+            db.session.commit()
+            response_code, error_text = 200, "Row successfuly edited!"
+            return_dict.update({"Data": None, "ErrorCode": 0, "ErrorText": error_text})
+        return json.dumps(return_dict), response_code, {'ContentType': 'application/json'}
+    elif request.method == "DELETE":  # Удаляем запись
+        edit_record_id = request.json.get('ID')
+        search_record = ProductsDairyRows.query.filter_by(id=edit_record_id).first()
+        if search_record is None:
+            response_code, error_code, error_text = 400, 64, "Record not found!"
+            return_dict.update({"Data": None, "ErrorCode": error_code, "ErrorText": error_text})
+        else:
+            if search_record.user.id != g.user.get("User").id:
+                response_code, error_code, error_text = 400, 64, "Record not found!"
+                return_dict.update({"Data": None, "ErrorCode": error_code, "ErrorText": error_text})
+            else:
+                db.session.delete(search_record)
+                db.session.commit()
+                response_code, error_code, error_text = 200, 0, "Value successfuly deleted!"
+                return_dict.update({"Data": None, "ErrorCode": error_code, "ErrorText": error_text})
+        return json.dumps(return_dict), response_code, {'ContentType': 'application/json'}
 
 
 if __name__ == "__main__":
