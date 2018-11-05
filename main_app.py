@@ -128,7 +128,7 @@ class MeasuresDairyRows(db.Model):
 class Products(db.Model):
     __tablename__ = "products"
     id = db.Column(db.Integer, primary_key=True, nullable=False)
-    name = db.Column(db.String(80), unique=True, nullable=False)
+    name = db.Column(db.String(128), unique=True, nullable=False)
     callories = db.Column(db.Integer, nullable=False)
     fat = db.Column(db.REAL, nullable=False)
     protein = db.Column(db.REAL, nullable=False)
@@ -153,6 +153,29 @@ class ProductsDairyRows(db.Model):
 
     def __repr__(self):
         return f"<ProductDairyRows {self.id}>"
+
+
+class Recipes(db.Model):
+    __tablename__ = "recipes"
+    id = db.Column(db.Integer, primary_key=True, nullable=False)
+    name = db.Column(db.String(128), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    is_private = db.Column(db.Boolean, nullable=False)
+    description = db.Column(db.String())
+
+    def __repr__(self):
+        return f"<Recipes {self.name}>"
+
+
+class RecipesProducts(db.Model):
+    __tablename__ = "recipes_products"
+    id = db.Column(db.Integer, primary_key=True, nullable=False)
+    recipe_id = db.Column(db.Integer, db.ForeignKey('recipes.id'), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey('products.id'), nullable=False)
+    product_weight = db.Column(db.Integer, nullable=False)
+
+    def __repr__(self):
+        return f"<RecipesProducts {self.recipe_id}: {self.product_id}>"
 
 
 @app.route('/api/Users/', methods=['POST'])
