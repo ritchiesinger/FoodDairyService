@@ -140,10 +140,6 @@ class Products(db.Model):
     def __repr__(self):
         return f"<Products {self.id} ({self.name})>"
 
-    def __dict__(self):
-        return {"ProductID": self.id, "ProductName": self.name, "ProductDescription": self.description,
-                "ProductImageLink": self.image_link, "IsDisabled": self.disabled, "Callories": self.callories}
-
 
 class ProductsDairyRows(db.Model):
     __tablename__ = "products_dairy_rows"
@@ -168,22 +164,29 @@ class Recipes(db.Model):
     description = db.Column(db.String())
     user = db.relationship("User", foreign_keys=user_id)
 
-    def get_recipe_products(self):
+    def get_recipe_for_list(self):
+        return {"RecipeID": self.id, "RecipeName": self.name, "RecipeOwner": self.user.username,
+                "RecipeDescription": self.description, "IsPrivate": self.is_private}
+
+    def get_recipe(self):
         product_list = list()
         recipes_products = RecipesProducts.query.filter(RecipesProducts.recipe_id == self.id).all()
         for product in recipes_products:
-            product_list.append({"ProductName": product.product.name, "ProductID": product.product.id,
-                                 "ProductWeight": product.product_weight,
-                                 "ProductTotalCallories": product.product_weight * product.product.callories / 100,
-                                 "ProductTotalFat": product.product_weight * product.product.fat / 100,
-                                 "ProductTotalProtein": product.product_weight * product.product.protein / 100,
-                                 "ProductTotalCarbohydrate":
-                                     product.product_weight * product.product.carbohydrate / 100})
-
-    def __dict__(self):
+            product_list.append(
+                {"ProductName": product.product.name, "ProductID": product.product.id,
+                 "ProductWeight": product.product_weight,
+                 "ProductTotalCallories": round(product.product_weight * product.product.callories / 100, 2),
+                 "ProductTotalFat": round(product.product_weight * product.product.fat / 100, 2),
+                 "ProductTotalProtein": round(product.product_weight * product.product.protein / 100, 2),
+                 "ProductTotalCarbohydrate": round(product.product_weight * product.product.carbohydrate / 100, 2)})
+        total_callories = round(sum([product.get("ProductTotalCallories") for product in product_list]), 2)
+        total_protein = round(sum([product.get("ProductTotalProtein") for product in product_list]), 2)
+        total_fat = round(sum([product.get("ProductTotalFat") for product in product_list]), 2)
+        total_carbohydrates = round(sum([product.get("ProductTotalCarbohydrate") for product in product_list]), 2)
         return {"RecipeID": self.id, "RecipeName": self.name, "RecipeOwner": self.user.username,
                 "RecipeDescription": self.description, "IsPrivate": self.is_private,
-                "RecipeProducts": self.get_recipe_products()}
+                "RecipeProducts": product_list, "TotalCallories": total_callories, "TotalProtein": total_protein,
+                "TotalFat": total_fat, "TotalCarbohydrate": total_carbohydrates}
 
     def __repr__(self):
         return f"<Recipes {self.name}>"
@@ -539,16 +542,30 @@ def products_dairy_rows():
         return json.dumps(return_dict), response_code, {'ContentType': 'application/json'}
 
 
-@app.route('/api/Recipes/', methods=["GET"])
+@app.route('/api/Recipe/', methods=["GET"])
 @auth.login_required
-def recipes():
-    print(request.args.get('q'))
+def recipe():
     return_dict = {"NewTokens": g.user.get("NewTokens")} if g.user.get("NewTokens") else dict()
     if request.method == "GET":  # Получаем данные
+        try:
+            recipe_id = int(request.args.get('id'))
+        except (ValueError, TypeError):
+            response_code, error_code, error_text = 400, 68, "Не передан ID рецепта или неверный формат!"
+            return_dict.update({"Data": None, 'ErrorText': error_text, "ErrorCode": error_code})
+            return jsonify(return_dict), response_code, {'ContentType': 'application/json'}
+        search_result = Recipes.query.filter(Recipes.user_id == g.user.get("User").id, Recipes.id == recipe_id).first()
+        response_code, error_code, error_text = 200, 0, None
+        return_dict.update({"Data": search_result.get_recipe(), 'ErrorText': error_text, "ErrorCode": error_code})
+        return jsonify(return_dict), response_code, {'ContentType': 'application/json'}
 
+
+@app.route('/api/SearchRecipes/', methods=["GET"])
+@auth.login_required
+def search_recipes():
+    return_dict = {"NewTokens": g.user.get("NewTokens")} if g.user.get("NewTokens") else dict()
+    if request.method == "GET":  # Получаем данные
         search_q = request.args.get('q') if request.args.get('q') else ""
-
-        is_private = False if request.args.get('is_private') == "0" else True
+        is_private = False if request.args.get('is_private', default=True) == "0" else True
         try:
             requested_page = int(request.args.get('page'))
         except TypeError:
@@ -556,13 +573,22 @@ def recipes():
         try:
             elements_per_page = int(request.args.get('per_page'))
         except TypeError:
-            requested_page = 20
+            elements_per_page = 20
         if is_private:
-            search_result = Recipes.query.filter(User.id == g.user.get("User").id, Recipes.name.contains(search_q)).all()
+            search_result = Recipes.query.filter(Recipes.user_id == g.user.get("User").id, Recipes.name.like(f"%{search_q}%")).all()
         else:
-            search_result = [dict(recipe) for recipe in Recipes.query.filter(Recipes.name.contains(search_q)).all()]
-        print(search_result)
-        return jsonify({}), 200, {'ContentType': 'application/json'}
+            search_result = Recipes.query.filter(Recipes.name.like(f"%{search_q}%")).all()
+        total_pages = len(search_result) / elements_per_page if len(search_result) % elements_per_page == 0 \
+            else len(search_result) // elements_per_page + 1
+        curent_page = requested_page if (len(search_result) / elements_per_page) >= requested_page else total_pages
+        return_result = search_result[int((curent_page-1)* elements_per_page): int(curent_page * elements_per_page)] \
+            if elements_per_page <= len(search_result) else search_result
+        response_code, error_code, error_text = 200, 0, None
+        return_dict.update({"Data": [recipe_obj.get_recipe_for_list() for recipe_obj in return_result],
+                            'ErrorText': error_text, "ErrorCode": error_code, "CurrentPage": curent_page,
+                            "TotalPages": total_pages, "TotalFoundRecipes": len(search_result),
+                            "RecipesOnPage": elements_per_page})
+        return jsonify(return_dict), response_code, {'ContentType': 'application/json'}
 
 
 if __name__ == "__main__":
