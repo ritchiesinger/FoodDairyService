@@ -565,7 +565,7 @@ def search_recipes():
     return_dict = {"NewTokens": g.user.get("NewTokens")} if g.user.get("NewTokens") else dict()
     if request.method == "GET":  # Получаем данные
         search_q = request.args.get('q') if request.args.get('q') else ""
-        is_private = False if request.args.get('is_private', default=True) == "0" else True
+        is_private = False if request.args.get('is_private') == "0" else True
         try:
             requested_page = int(request.args.get('page'))
         except TypeError:
