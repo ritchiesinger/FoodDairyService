@@ -140,6 +140,10 @@ class Products(db.Model):
     def __repr__(self):
         return f"<Products {self.id} ({self.name})>"
 
+    def __dict__(self):
+        return {"ProductID": self.id, "ProductName": self.name, "ProductDescription": self.description,
+                "ProductImageLink": self.image_link, "IsDisabled": self.disabled, "Callories": self.callories}
+
 
 class ProductsDairyRows(db.Model):
     __tablename__ = "products_dairy_rows"
@@ -162,6 +166,24 @@ class Recipes(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     is_private = db.Column(db.Boolean, nullable=False)
     description = db.Column(db.String())
+    user = db.relationship("User", foreign_keys=user_id)
+
+    def get_recipe_products(self):
+        product_list = list()
+        recipes_products = RecipesProducts.query.filter(RecipesProducts.recipe_id == self.id).all()
+        for product in recipes_products:
+            product_list.append({"ProductName": product.product.name, "ProductID": product.product.id,
+                                 "ProductWeight": product.product_weight,
+                                 "ProductTotalCallories": product.product_weight * product.product.callories / 100,
+                                 "ProductTotalFat": product.product_weight * product.product.fat / 100,
+                                 "ProductTotalProtein": product.product_weight * product.product.protein / 100,
+                                 "ProductTotalCarbohydrate":
+                                     product.product_weight * product.product.carbohydrate / 100})
+
+    def __dict__(self):
+        return {"RecipeID": self.id, "RecipeName": self.name, "RecipeOwner": self.user.username,
+                "RecipeDescription": self.description, "IsPrivate": self.is_private,
+                "RecipeProducts": self.get_recipe_products()}
 
     def __repr__(self):
         return f"<Recipes {self.name}>"
@@ -173,6 +195,8 @@ class RecipesProducts(db.Model):
     recipe_id = db.Column(db.Integer, db.ForeignKey('recipes.id'), nullable=False)
     product_id = db.Column(db.Integer, db.ForeignKey('products.id'), nullable=False)
     product_weight = db.Column(db.Integer, nullable=False)
+    product = db.relationship("Products", foreign_keys=product_id)
+    recipe = db.relationship("Recipes", foreign_keys=recipe_id)
 
     def __repr__(self):
         return f"<RecipesProducts {self.recipe_id}: {self.product_id}>"
@@ -513,6 +537,32 @@ def products_dairy_rows():
                 response_code, error_code, error_text = 200, 0, "Value successfuly deleted!"
                 return_dict.update({"Data": None, "ErrorCode": error_code, "ErrorText": error_text})
         return json.dumps(return_dict), response_code, {'ContentType': 'application/json'}
+
+
+@app.route('/api/Recipes/', methods=["GET"])
+@auth.login_required
+def recipes():
+    print(request.args.get('q'))
+    return_dict = {"NewTokens": g.user.get("NewTokens")} if g.user.get("NewTokens") else dict()
+    if request.method == "GET":  # Получаем данные
+
+        search_q = request.args.get('q') if request.args.get('q') else ""
+
+        is_private = False if request.args.get('is_private') == "0" else True
+        try:
+            requested_page = int(request.args.get('page'))
+        except TypeError:
+            requested_page = 1
+        try:
+            elements_per_page = int(request.args.get('per_page'))
+        except TypeError:
+            requested_page = 20
+        if is_private:
+            search_result = Recipes.query.filter(User.id == g.user.get("User").id, Recipes.name.contains(search_q)).all()
+        else:
+            search_result = [dict(recipe) for recipe in Recipes.query.filter(Recipes.name.contains(search_q)).all()]
+        print(search_result)
+        return jsonify({}), 200, {'ContentType': 'application/json'}
 
 
 if __name__ == "__main__":
