@@ -29,7 +29,9 @@ class TestingConfig(Config):
 
 
 class ProductionConfig(Config):
-    SQLALCHEMY_DATABASE_URI = "ritchiesinger.mysql.pythonanywhere-services.com"
+
+    SQLALCHEMY_DATABASE_URI = "mysql+mysqlconnector://ritchiesinger:RaInBoW1@" \
+                              "ritchiesinger.mysql.pythonanywhere-services.com/ritchiesinger$fooddairyservicedb"
 
 
 config = {
