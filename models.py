@@ -84,7 +84,7 @@ class Measures(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True, unique=True, nullable=False)
     measure_name = db.Column(db.String(128), unique=True, nullable=False)
     measure_dimension = db.Column(db.String(32), nullable=False)
-    description = db.Column(db.String())
+    description = db.Column(db.String)
 
     def __repr__(self):
         return f"<Measures: {self.measure_name}>"
@@ -111,8 +111,8 @@ class Products(db.Model):
     fat = db.Column(db.REAL, nullable=False)
     protein = db.Column(db.REAL, nullable=False)
     carbohydrate = db.Column(db.REAL, nullable=False)
-    description = db.Column(db.String())
-    image_link = db.Column(db.String())
+    description = db.Column(db.String)
+    image_link = db.Column(db.String)
     disabled = db.Column(db.Boolean, nullable=False)
 
     def __repr__(self):
@@ -139,7 +139,7 @@ class Recipes(db.Model):
     name = db.Column(db.String(128), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     is_private = db.Column(db.Boolean, nullable=False)
-    description = db.Column(db.String())
+    description = db.Column(db.String)
     user = db.relationship("User", foreign_keys=user_id)
 
     def get_recipe_for_list(self):
