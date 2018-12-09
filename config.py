@@ -4,15 +4,11 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 
 class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    SECRET_KEY = os.environ.get("SECRET_KEY")
+    SECRET_KEY = "Very Secret Key"
     SQLALCHEMY_COMMIT_ON_TEARDOWN = True
     MAIL_SUBJECT_PREFIX = "[FoodDairyProject]"
     MAIL_DEFAULT_SENDER = "FoodDairy Admin"
     ADMIN = os.environ.get("ADMIN")
-
-    @staticmethod
-    def init_app(app):
-        pass
 
 
 class DevelopmentConfig(Config):
@@ -33,8 +29,7 @@ class TestingConfig(Config):
 
 
 class ProductionConfig(Config):
-    SQLALCHEMY_DATABASE_URI = \
-        os.environ.get("DATABASE_URI") or f"sqlite:///{os.path.join(basedir, 'fooddairydb.sqlite3')}"
+    SQLALCHEMY_DATABASE_URI = "ritchiesinger.mysql.pythonanywhere-services.com"
 
 
 config = {
