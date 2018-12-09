@@ -34,6 +34,26 @@ def send_mail(recipients, subject, html):
         mail.send(msg)
 
 
+@auth.verify_password
+def verify_password(username_or_auth_token, password_or_refresh_token):
+    # Сначала пробуем авторизоваться по токену
+    user = User.verify_auth_token(secret_key=app.config["SECRET_KEY"], auth_token=username_or_auth_token,
+                                  refresh_token=password_or_refresh_token)
+    if not user:
+        # А теперь по обычному - логину и паролю
+        user = User.query.filter_by(username=username_or_auth_token).first()
+        if not user or not user.verify_password(password_or_refresh_token):
+            return False
+        user = {"User": user}
+    g.user = user
+    return True
+
+
+@app.route('/', methods=['GET'])
+def app_test():
+    return jsonify({"Data": "Hello FoodDairyService!"}), 200
+
+
 @app.route('/api/Users/', methods=['POST'])
 def user_registration():
     username = request.json.get('username')
@@ -60,21 +80,6 @@ def user_registration():
 def get_tokens():
     tokens = g.user.get("User").generate_tokens(secret_key=app.config["SECRET_KEY"], is_refresh="All")
     return jsonify({"data": {"AuthToken": tokens.get("AuthToken"), "RefreshToken": tokens.get("RefreshToken")}})
-
-
-@auth.verify_password
-def verify_password(username_or_auth_token, password_or_refresh_token):
-    # Сначала пробуем авторизоваться по токену
-    user = User.verify_auth_token(secret_key=app.config["SECRET_KEY"], auth_token=username_or_auth_token,
-                                  refresh_token=password_or_refresh_token)
-    if not user:
-        # А теперь по обычному - логину и паролю
-        user = User.query.filter_by(username=username_or_auth_token).first()
-        if not user or not user.verify_password(password_or_refresh_token):
-            return False
-        user = {"User": user}
-    g.user = user
-    return True
 
 
 @app.route('/api/PasswordReset/', methods=["GET"])
