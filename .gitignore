@@ -2,3 +2,4 @@ venv/
 fooddairydb
 .idea/
 __pycache__/
+fooddairydb.sqlite3
