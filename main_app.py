@@ -591,5 +591,40 @@ def search_recipes():
         return jsonify(return_dict), response_code, {'ContentType': 'application/json'}
 
 
+@app.route('/api/UseRecipe/', methods=["POST"])
+@auth.login_required
+def use_recipe():
+    return_dict = {"NewTokens": g.user.get("NewTokens")} if g.user.get("NewTokens") else dict()
+    if request.method == "POST":  # Добавляем новую запись
+        user_id = g.user.get("User").id
+        input_datetime = request.json.get('RecordDateTime')
+        datetime_format = '%Y%m%d%H%M'
+        if input_datetime is not None:
+            try:  # Проверяем формат переданного значения
+                record_datetime = datetime.datetime.strptime(input_datetime, datetime_format)
+            except ValueError:
+                response_code, error_code, error_text = 400, 62, "Unexpected datetime format! Expected 'YYYYMMDDHHMM'!"
+                return_dict.update({"Data": None, "ErrorCode": error_code, "ErrorText": error_text})
+                return json.dumps(return_dict), response_code, {'ContentType': 'application/json'}
+        else:  # Если параметр не передан, то устанавливаем текущую дату и время
+            record_datetime = datetime.datetime.now()
+        recipe_id = request.json.get('RecipeID')
+        if Recipes.query.filter_by(id=product_id).first() is None:
+            response_code, error_code, error_text = 400, 69, "Recipe not found!"
+            return_dict.update({"Data": None, "ErrorCode": error_code, "ErrorText": error_text})
+            return json.dumps(return_dict), response_code, {'ContentType': 'application/json'}
+
+
+        search_result = Recipes.query.filter_by(id=product_id).first()
+
+        print(search_result)
+        #products_dairy_row = ProductsDairyRows(user_id=user_id, product_id=product_id, record_datetime=record_datetime,
+        #                                       product_weight=product_weight)
+        #db.session.add(products_dairy_row)
+        #db.session.commit()
+        response_code, error_code, error_text = 200, 0, "Row successfuly added!"
+        #return_dict.update({"Data": None, "ErrorCode": error_code, "ErrorText": error_text})
+        return json.dumps(return_dict), response_code, {'ContentType': 'application/json'}
+
 if __name__ == "__main__":
     app.run(debug=True)
