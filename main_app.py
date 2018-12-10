@@ -4,7 +4,7 @@ import datetime
 from flask_httpauth import HTTPBasicAuth
 from flask_mail import Mail, Message
 import random
-from config import config
+from config import Config
 from models import db, User, Measures, MeasuresDairyRows, Products, ProductsDairyRows, Recipes
 
 
@@ -16,7 +16,7 @@ def create_app(app_config, app_db):
 
 
 auth = HTTPBasicAuth()
-create_result = create_app(config.get("development"), db)
+create_result = create_app(Config(), db)
 app = create_result.get("app")
 mail = Mail(app)
 
