@@ -50,6 +50,7 @@ def verify_password(username_or_auth_token, password_or_refresh_token):
 
 
 @app.route('/', methods=['GET'])
+@crossdomain(origin='*')
 def app_test():
     return jsonify({"Data": "Hello FoodDairyService!"}), 200
 
