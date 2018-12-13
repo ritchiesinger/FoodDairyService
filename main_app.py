@@ -6,12 +6,14 @@ from flask_mail import Mail, Message
 import random
 from config import Config
 from models import db, User, Measures, MeasuresDairyRows, Products, ProductsDairyRows, Recipes
+from flask_cors import CORS
 
 
 def create_app(app_config, app_db):
     return_app = Flask(__name__)
     return_app.config.from_object(app_config)
     app_db.init_app(return_app)
+    CORS(return_app)
     return {"app": return_app, "db": app_db}
 
 
@@ -50,7 +52,6 @@ def verify_password(username_or_auth_token, password_or_refresh_token):
 
 
 @app.route('/', methods=['GET'])
-@crossdomain(origin='*')
 def app_test():
     return jsonify({"Data": "Hello FoodDairyService!"}), 200
 
