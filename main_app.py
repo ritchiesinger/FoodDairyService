@@ -13,7 +13,7 @@ def create_app(app_config, app_db):
     return_app = Flask(__name__)
     return_app.config.from_object(app_config)
     app_db.init_app(return_app)
-    CORS(return_app)
+    CORS(return_app, resources={r"/*": {"origins": "*"}})
     return {"app": return_app, "db": app_db}
 
 
