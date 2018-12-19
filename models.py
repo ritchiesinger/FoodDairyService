@@ -55,7 +55,7 @@ class User(db.Model):
             return return_dict
         except SignatureExpired:
             # return None  # Токен протух
-            try_refresh_token = User.verify_refresh_token(refresh_token)
+            try_refresh_token = User.verify_refresh_token(refresh_token, secret_key)
             if try_refresh_token is not None:
                 new_tokens = try_refresh_token.generate_tokens(secret_key=secret_key)
                 return {"User": try_refresh_token, "NewTokens": new_tokens}
