@@ -48,7 +48,7 @@ class User(db.Model):
             data = auth_token_check.loads(auth_token)
             user = User.query.get(data['id'])
             return_dict.update({"User": user})
-            try_refresh_token = user.verify_refresh_token(refresh_token)
+            try_refresh_token = user.verify_refresh_token(refresh_token, secret_key)
             if try_refresh_token is None:
                 new_tokens = user.generate_tokens(secret_key=secret_key, is_refresh=True)
                 return_dict.update({"NewTokens": new_tokens})

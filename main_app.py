@@ -81,7 +81,10 @@ def user_registration():
 @auth.login_required
 def get_tokens():
     tokens = g.user.get("User").generate_tokens(secret_key=app.config["SECRET_KEY"], is_refresh="All")
-    return jsonify({"data": {"AuthToken": tokens.get("AuthToken"), "RefreshToken": tokens.get("RefreshToken")}})
+    return_dict = {"data": {"UserName": g.user.get("User").username, "Email": g.user.get("User").email}}
+    return_dict.update({"NewTokens": {"AuthToken": tokens.get("AuthToken"),
+                                      "RefreshToken": tokens.get("RefreshToken")}})
+    return jsonify(return_dict)
 
 
 @app.route('/api/PasswordReset/', methods=["GET"])
