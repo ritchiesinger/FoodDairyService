@@ -53,16 +53,13 @@ class User(db.Model):
                 new_tokens = user.generate_tokens(secret_key=secret_key, is_refresh=True)
                 return_dict.update({"NewTokens": new_tokens})
             return return_dict
-        except SignatureExpired:
-            # return None  # Токен протух
+        except (SignatureExpired, BadSignature):
             try_refresh_token = User.verify_refresh_token(refresh_token, secret_key)
             if try_refresh_token is not None:
                 new_tokens = try_refresh_token.generate_tokens(secret_key=secret_key)
                 return {"User": try_refresh_token, "NewTokens": new_tokens}
             else:
                 return None
-        except BadSignature:
-            return None  # Неверный токен
 
     @staticmethod
     def verify_refresh_token(refresh_token, secret_key):
