@@ -103,8 +103,8 @@ def password_reset():
                f"<p>Пароль к учётной записи {user.email} сброшен и сгенерирован новый, который вы сможете в любой " \
                "момент поменять самостоятельно.<p>" \
                f"<p>Сгенерированный пароль:<b>{new_password}</b></p>"
-        send_mail(recipients=["ritchie_singer@mail.ru"], subject="Восстановление пароля к сервису FoodDairy", html=html)
-        return jsonify({"data": f"New password send to {email}!"})
+        # send_mail(recipients=["ritchie_singer@mail.ru"], subject="Восстановление пароля к сервису FoodDairy", html=html)
+        return jsonify({"data": f"New password '{new_password}' send to {email}!"})
 
 
 @app.route('/api/SetNewPassword/', methods=["POST"])
@@ -473,6 +473,10 @@ def use_recipe():
         response_code, error_code, error_text = 200, 0, "Row successfuly added!"
         #return_dict.update({"Data": None, "ErrorCode": error_code, "ErrorText": error_text})
         return json.dumps(return_dict), response_code, {'ContentType': 'application/json'}
+
+@auth.error_handler
+def auth_error():
+    return "Ошибка авторизации!"
 
 if __name__ == "__main__":
     app.run(debug=True)
