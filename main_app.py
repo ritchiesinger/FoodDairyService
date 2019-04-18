@@ -51,11 +51,6 @@ def verify_password(username_or_auth_token, password_or_refresh_token):
     return True
 
 
-@app.route('/', methods=['GET'])
-def app_test():
-    return jsonify({"Data": "Hello FoodDairyService!"}), 200
-
-
 @app.route('/api/Users/', methods=['POST'])
 def user_registration():
     username = request.json.get('username')
@@ -272,9 +267,9 @@ def products_dairy_rows():
                                    'ErrorText': error_text,
                                    "ErrorCode": error_code}), response_code, {'ContentType': 'application/json'}
             product_rows = ProductsDairyRows.query.filter_by(user_id=g.user.get("User").id).\
-                filter(MeasuresDairyRows.measure_datetime >= date_from,
-                       MeasuresDairyRows.measure_datetime < date_to).\
-                order_by(MeasuresDairyRows.measure_datetime.desc()).all()
+                filter(ProductsDairyRows.record_datetime >= date_from,
+                       ProductsDairyRows.record_datetime < date_to).\
+                order_by(ProductsDairyRows.record_datetime.desc()).all()
         else:
             product_rows = MeasuresDairyRows.query.filter_by(user_id=g.user.get("User").id).\
                 order_by(MeasuresDairyRows.measure_datetime.desc()).all()
@@ -288,7 +283,14 @@ def products_dairy_rows():
                               "Carbohydrate": row.product_weight * row.product.carbohydrate / 100})
         response_code, error_code = 200, 0
         error_text = "Success"
-        return_dict.update({"Data": rows_list, "ErrorText": error_text, "ErrorCode": error_code})
+        return_dict.update({"Data":
+                                {"FoodRows": rows_list,
+                                 "TotalCallories": round(sum([product.get("Callories") for product in rows_list]), 2),
+                                 "TotalProtein": round(sum([product.get("Protein") for product in rows_list]), 2),
+                                 "TotalFat": round(sum([product.get("Fat") for product in rows_list]), 2),
+                                 "TotalCarbohydrate": round(sum([product.get("Carbohydrate") for product in rows_list]), 2)},
+                            "ErrorText": error_text,
+                            "ErrorCode": error_code})
         return jsonify(return_dict), response_code, {'ContentType': 'application/json'}
     elif request.method == "POST":  # Добавляем новую запись
         user_id = g.user.get("User").id
@@ -476,7 +478,9 @@ def use_recipe():
 
 @auth.error_handler
 def auth_error():
-    return "Ошибка авторизации!"
+    res = make_response('Invalid credientials')
+    res.status_code = 403
+    return res
 
 if __name__ == "__main__":
     app.run(debug=True)

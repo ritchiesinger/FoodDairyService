@@ -19,7 +19,7 @@ class User(db.Model):
     def verify_password(self, password):
         return pwd_context.verify(password, self.password_hash)
 
-    def generate_tokens(self, secret_key, is_refresh=False, expiration=60):  # 60 секунд на пртухание
+    def generate_tokens(self, secret_key, is_refresh=False, expiration=300):  # 60 секунд на пртухание
         """ Генерация токенов
         :param secret_key: секретная строка (обычно из конфига берётся)
         :param is_refresh: параметр, определяющий какой токен надо сгенерировать. True - будет сгенерирован
