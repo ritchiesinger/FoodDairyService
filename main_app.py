@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, g
+from flask import Flask, request, jsonify, g, Response
 import json
 import datetime
 from flask_httpauth import HTTPBasicAuth
@@ -478,9 +478,8 @@ def use_recipe():
 
 @auth.error_handler
 def auth_error():
-    res = make_response('Invalid credientials')
-    res.status_code = 403
-    return res
+    response = Response('Неверные данные авторизации!', 403, {'WWW-Authenticate': 'FormBased realm="Login Required"'})
+    return response
 
 if __name__ == "__main__":
     app.run(debug=True)
